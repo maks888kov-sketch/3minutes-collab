@@ -1,0 +1,84 @@
+---
+description: Отправка изменений на GitHub через терминал (git push). Использовать, когда пользователь просит залить/отправить код на GitHub.
+alwaysApply: true
+---
+
+# GitHub: отправка файлов через терминал
+
+## Что понимать
+
+- На сайте github.com **нет** кнопки «переместить все файлы проекта». Загрузка через браузер (Upload files) ограничена ~100 файлами и **не используется**.
+- Код отправляют **из терминала Cursor** командами `git add`, `git commit`, `git push`.
+- Пользователь работает в **Windows + PowerShell** — не использовать bash-синтаксис (`<<'EOF'`, heredoc).
+
+## Репозиторий проекта
+
+- Папка: `c:\MaxPro\awesome-three-minute-spark\awesome-three-minute-spark`
+- Remote (backup): `https://github.com/maks888kov-sketch/3minutes-backup.git`
+- Remote (Base44, после создания в Base44): `https://github.com/maks888kov-sketch/3minutes.git`
+- Ветка: `main`
+- Проверка backup: https://github.com/maks888kov-sketch/3minutes-backup
+
+## Когда выполнять
+
+Только если пользователь **явно просит**: «запушь на github», «отправь на github», «залей на github», «upload to github» и т.п.
+
+**Не** коммитить и **не** пушить без явной просьбы.
+
+## Алгоритм (агент выполняет сам, не только инструкции)
+
+1. Перейти в папку проекта:
+   ```powershell
+   cd c:\MaxPro\awesome-three-minute-spark\awesome-three-minute-spark
+   ```
+
+2. Проверить состояние (можно параллельно `git status`, `git diff`, `git log -3 --oneline`):
+   ```powershell
+   git status
+   ```
+   Если `nothing to commit, working tree clean` — сообщить, что всё уже на GitHub; push не нужен.
+
+3. Добавить изменения:
+   ```powershell
+   git add .
+   ```
+   Не добавлять вручную: `.env`, `.env.local`, `node_modules`, `dist` — они в `.gitignore`.
+
+4. Закоммитить (PowerShell — одна строка `-m`):
+   ```powershell
+   git commit -m "Краткое описание изменений на русском или английском"
+   ```
+
+5. Отправить на GitHub:
+   ```powershell
+   git push origin main
+   ```
+
+6. Отправить на backup и (если есть) в Base44-репо:
+   ```powershell
+   git push origin main
+   git push https://github.com/maks888kov-sketch/3minutes.git main
+   ```
+   Второй push — только если репозиторий `3minutes` уже создан в Base44 (не путать с redirect на backup).
+
+7. Проверить успех:
+   ```powershell
+   git status
+   ```
+   Должно быть: `nothing to commit, working tree clean`. Сообщить пользователю ссылку на репозиторий.
+
+## Безопасность
+
+- **НЕ** менять `git config`.
+- **НЕ** делать `git push --force` на `main`.
+- **НЕ** пушить на remote без запроса пользователя.
+- **НЕ** коммитить файлы с секретами (`.env`, `.env.local`, ключи API).
+
+## Если push не прошёл
+
+- `Authentication failed` — пользователю нужен вход в GitHub или Personal Access Token (Settings → Developer settings → tokens, scope `repo`).
+- `git: command not found` — установить Git: https://git-scm.com/download/win
+
+## GitHub ≠ сайт для друзей
+
+После push напомнить: для пользователей приложение публикуется на **Base44 → Publish**, URL: https://awesome-three-minute-spark.base44.app

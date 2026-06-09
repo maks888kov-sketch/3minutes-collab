@@ -1,0 +1,57 @@
+{
+  "name": "Feedback",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Short title of the suggestion"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "feature",
+        "bug",
+        "design",
+        "other"
+      ],
+      "default": "feature"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "new",
+        "planned",
+        "in_progress",
+        "done"
+      ],
+      "default": "new"
+    },
+    "votes": {
+      "type": "number",
+      "default": 0
+    },
+    "voter_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "author_name": {
+      "type": "string"
+    },
+    "admin_reply": {
+      "type": "string"
+    },
+    "screenshot_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

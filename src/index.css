@@ -1,0 +1,206 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: 'Inter', sans-serif;
+    --background: 250 15% 6%;
+    --foreground: 0 0% 96%;
+    --card: 250 15% 9%;
+    --card-foreground: 0 0% 96%;
+    --popover: 250 15% 9%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 270 80% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 250 15% 14%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 250 12% 16%;
+    --muted-foreground: 250 8% 55%;
+    --accent: 330 85% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 250 12% 16%;
+    --input: 250 12% 16%;
+    --ring: 270 80% 60%;
+    --chart-1: 270 80% 60%;
+    --chart-2: 330 85% 60%;
+    --chart-3: 200 80% 55%;
+    --chart-4: 45 90% 55%;
+    --chart-5: 150 70% 50%;
+    --radius: 1rem;
+    --sidebar-background: 250 15% 6%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 270 80% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 250 15% 14%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 250 12% 16%;
+    --sidebar-ring: 270 80% 60%;
+  }
+
+  .dark {
+    --background: 250 15% 6%;
+    --foreground: 0 0% 96%;
+    --card: 250 15% 9%;
+    --card-foreground: 0 0% 96%;
+    --popover: 250 15% 9%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 270 80% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 250 15% 14%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 250 12% 16%;
+    --muted-foreground: 250 8% 55%;
+    --accent: 330 85% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 250 12% 16%;
+    --input: 250 12% 16%;
+    --ring: 270 80% 60%;
+    --chart-1: 270 80% 60%;
+    --chart-2: 330 85% 60%;
+    --chart-3: 200 80% 55%;
+    --chart-4: 45 90% 55%;
+    --chart-5: 150 70% 50%;
+    --sidebar-background: 250 15% 6%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 270 80% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 250 15% 14%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 250 12% 16%;
+    --sidebar-ring: 270 80% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+    min-height: 100dvh;
+    background-color: #0d0b14;
+  }
+
+  #root {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-inter;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    user-select: none;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 0px;
+}
+
+/* Glassmorphism utilities */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.neon-glow {
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.3), 0 0 60px rgba(168, 85, 247, 0.1);
+}
+
+.neon-glow-pink {
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.3), 0 0 60px rgba(236, 72, 153, 0.1);
+}
+
+.gradient-primary {
+  background: linear-gradient(135deg, hsl(270, 80%, 60%), hsl(330, 85%, 60%));
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, hsl(270, 80%, 60%), hsl(330, 85%, 60%));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Safe area for mobile */
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Discover — ширина как в MosDate: телефон/планшет почти на весь экран */
+.discover-feed-zone {
+  width: 100%;
+  max-width: none;
+  margin-inline: auto;
+  padding-inline: 4px;
+}
+
+.discover-card-frame {
+  position: relative;
+  margin-inline: auto;
+  width: calc(100% - 6px);
+  max-width: 100%;
+  /* Явная высота: при только absolute-детях aspect-ratio даёт 0px на мобильных */
+  height: min(calc((100vw - 6px) * 4 / 3), calc(100dvh - 17rem), 100%);
+  min-height: min(58vw, calc(100dvh - 17rem));
+  max-height: calc(100dvh - 17rem);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* Только широкий десктоп — ограничиваем, чтобы не растягивать на большом мониторе */
+@media (min-width: 1200px) {
+  .discover-feed-zone {
+    max-width: 720px;
+  }
+
+  .discover-card-frame {
+    width: min(680px, calc(100% - 12px));
+    height: min(calc((100vw - 12px) * 4 / 3), 880px, calc(100dvh - 9rem));
+    min-height: 480px;
+    max-height: min(calc(100dvh - 9rem), 880px);
+  }
+}
+
+/* Chat input — выше края экрана на телефонах */
+.chat-composer {
+  flex-shrink: 0;
+  padding-bottom: max(1.25rem, calc(env(safe-area-inset-bottom, 0px) + 0.875rem));
+}
+
+/* Десктоп: приложение свёрстано под телефон, а body/#root стоят с overflow:hidden,
+   из-за чего на широком окне высокие экраны (регистрация/настройка профиля)
+   обрезаются и до кнопок не докрутить. На десктопе разрешаем вертикальную
+   прокрутку. Полноэкранные страницы (лента/чат/видео) ровно по высоте окна —
+   у них прокрутка не появляется. Мобильную вёрстку (<768px) не трогаем. */
+@media (min-width: 768px) {
+  #root {
+    overflow-y: auto;
+  }
+}

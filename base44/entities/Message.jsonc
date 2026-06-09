@@ -1,0 +1,41 @@
+{
+  "name": "Message",
+  "type": "object",
+  "properties": {
+    "match_id": {
+      "type": "string",
+      "description": "Match this message belongs to"
+    },
+    "sender_profile_id": {
+      "type": "string",
+      "description": "Profile ID of sender"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "text",
+        "photo",
+        "voice",
+        "system"
+      ],
+      "default": "text"
+    },
+    "content": {
+      "type": "string",
+      "description": "Message text or file URL"
+    },
+    "reaction": {
+      "type": "string",
+      "description": "Emoji reaction"
+    },
+    "is_read": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "match_id",
+    "sender_profile_id",
+    "content"
+  ]
+}

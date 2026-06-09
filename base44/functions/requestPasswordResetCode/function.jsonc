@@ -1,0 +1,4 @@
+{
+  "name": "requestPasswordResetCode",
+  "entry": "entry.ts"
+}

@@ -1,0 +1,27 @@
+{
+  "name": "Like",
+  "type": "object",
+  "properties": {
+    "from_profile_id": {
+      "type": "string",
+      "description": "Profile ID of the liker"
+    },
+    "to_profile_id": {
+      "type": "string",
+      "description": "Profile ID of the liked person"
+    },
+    "is_like": {
+      "type": "boolean",
+      "description": "true = like, false = pass"
+    },
+    "is_super_like": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "from_profile_id",
+    "to_profile_id",
+    "is_like"
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "name": "resetPasswordWithCode",
+  "entry": "entry.ts"
+}

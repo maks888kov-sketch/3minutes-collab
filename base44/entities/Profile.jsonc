@@ -1,0 +1,127 @@
+{
+  "name": "Profile",
+  "type": "object",
+  "properties": {
+    "telegram_id": {
+      "type": "string",
+      "description": "Telegram user ID"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name"
+    },
+    "age": {
+      "type": "number",
+      "description": "User age"
+    },
+    "city": {
+      "type": "string",
+      "description": "City"
+    },
+    "bio": {
+      "type": "string",
+      "description": "About me text"
+    },
+    "photos": {
+      "type": "array",
+      "description": "Profile photo URLs",
+      "items": {
+        "type": "string"
+      }
+    },
+    "interests": {
+      "type": "array",
+      "description": "User interests/tags",
+      "items": {
+        "type": "string"
+      }
+    },
+    "goal": {
+      "type": "string",
+      "enum": [
+        "relationship",
+        "friendship",
+        "networking",
+        "chat"
+      ],
+      "description": "Dating goal"
+    },
+    "gender": {
+      "type": "string",
+      "enum": [
+        "male",
+        "female",
+        "other"
+      ],
+      "description": "Gender"
+    },
+    "looking_for": {
+      "type": "string",
+      "enum": [
+        "male",
+        "female",
+        "everyone"
+      ],
+      "description": "Looking for gender"
+    },
+    "is_online": {
+      "type": "boolean",
+      "default": false,
+      "description": "Online status"
+    },
+    "last_seen": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last active timestamp"
+    },
+    "is_premium": {
+      "type": "boolean",
+      "default": false,
+      "description": "Premium subscription status"
+    },
+    "is_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "profile_complete": {
+      "type": "boolean",
+      "default": false
+    },
+    "min_age_filter": {
+      "type": "number",
+      "default": 18
+    },
+    "max_age_filter": {
+      "type": "number",
+      "default": 45
+    },
+    "city_filter": {
+      "type": "string",
+      "default": ""
+    },
+    "photo_slides": {
+      "type": "array",
+      "description": "Per-photo overlay: tags and text for each photo index",
+      "items": {
+        "type": "object",
+        "properties": {
+          "showName": { "type": "boolean" },
+          "text": { "type": "string" },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "emoji": { "type": "string" },
+                "label": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

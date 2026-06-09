@@ -1,0 +1,3 @@
+# Local uploaded files (photos, voice) — keep the folder, ignore its contents.
+*
+!.gitignore

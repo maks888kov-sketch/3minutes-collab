@@ -1,0 +1,70 @@
+{
+  "name": "Match",
+  "type": "object",
+  "properties": {
+    "profile_a_id": {
+      "type": "string",
+      "description": "First profile"
+    },
+    "profile_b_id": {
+      "type": "string",
+      "description": "Second profile"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "video_unlocked",
+        "completed",
+        "ended"
+      ],
+      "default": "active",
+      "description": "Match status"
+    },
+    "video_consent_a": {
+      "type": "boolean",
+      "default": false
+    },
+    "video_consent_b": {
+      "type": "boolean",
+      "default": false
+    },
+    "video_result_a": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "continue",
+        "end"
+      ],
+      "default": "pending"
+    },
+    "video_result_b": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "continue",
+        "end"
+      ],
+      "default": "pending"
+    },
+    "last_message_text": {
+      "type": "string"
+    },
+    "last_message_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "unread_count_a": {
+      "type": "number",
+      "default": 0
+    },
+    "unread_count_b": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "profile_a_id",
+    "profile_b_id"
+  ]
+}

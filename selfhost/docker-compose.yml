@@ -1,0 +1,121 @@
+# Self-hosted, fully autonomous stack for 3Minutes.
+# Uses a dedicated project name + non-default host ports so it never collides
+# with any container/process you already have running.
+name: 3min-selfhost
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: 3min-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: threemin
+      POSTGRES_PASSWORD: threemin_secret
+      POSTGRES_DB: threemin
+    ports:
+      - "5544:5432"            # host 5544 -> avoid the existing 5432 db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threemin -d threemin"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: 3min-redis
+    restart: unless-stopped
+    ports:
+      - "6390:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2024-09-22T00-33-43Z
+    container_name: 3min-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9100:9000"            # S3 API
+      - "9101:9001"            # console UI
+    volumes:
+      - miniodata:/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: 3min-mailpit
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - "8026:8025"            # web UI + REST API (used by the E2E to read OTP codes)
+      - "1026:1025"            # SMTP
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: 3min-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+asyncpg://threemin:threemin_secret@postgres:5432/threemin
+      SYNC_DATABASE_URL: postgresql+psycopg://threemin:threemin_secret@postgres:5432/threemin
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: dev-super-secret-change-me-3minutes
+      # Storage: "local" (on disk, default) or "minio" (S3). Local files land in
+      # ./uploads on the host (mounted below) and are git-ignored.
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_DIR: /data/uploads
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET: threemin-uploads
+      MINIO_SECURE: "false"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: no-reply@3minutes.local
+      PUBLIC_FILE_BASE: /api/files
+    volumes:
+      # Local file storage lives in the project at selfhost/uploads (git-ignored).
+      - ./uploads:/data/uploads
+    ports:
+      - "4010:8000"            # exposed for debugging; the browser uses nginx instead
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: selfhost/frontend/Dockerfile
+    container_name: 3min-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5180:80"              # open http://localhost:5180
+
+volumes:
+  pgdata:
+  miniodata:

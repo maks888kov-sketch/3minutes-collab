@@ -1,0 +1,19 @@
+{
+  "name": "3Minutes",
+  "short_name": "3Minutes",
+  "description": "Знакомства за 3 минуты",
+  "start_url": "/discover",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0b14",
+  "theme_color": "#0d0b14",
+  "icons": [
+    {
+      "src": "https://base44.com/logo_v2.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
