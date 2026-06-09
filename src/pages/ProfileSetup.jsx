@@ -40,6 +40,7 @@ export default function ProfileSetup() {
   const [step, setStep] = useState(0);
   const [photoSlots, setPhotoSlots] = useState(Array(6).fill(null));
   const [uploadingIndex, setUploadingIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
   const [photoError, setPhotoError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [stepError, setStepError] = useState('');
@@ -98,10 +99,9 @@ export default function ProfileSetup() {
 
   const uploadedPhotos = photoSlots.filter((url) => url && !url.startsWith('blob:'));
 
-  const handlePhotoUpload = async (slotIndex, e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
+  const processFile = async (slotIndex, file) => {
     if (!file) return;
+    if (uploadingIndex !== null) return;
 
     if (!file.type.startsWith('image/')) {
       setPhotoError('Выберите изображение (JPG, PNG и т.д.)');
@@ -151,6 +151,19 @@ export default function ProfileSetup() {
     } finally {
       setUploadingIndex(null);
     }
+  };
+
+  const handlePhotoUpload = (slotIndex, e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    processFile(slotIndex, file);
+  };
+
+  const handleDrop = (slotIndex, e) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    const file = e.dataTransfer?.files?.[0];
+    processFile(slotIndex, file);
   };
 
   const toggleInterest = (interest) => {
@@ -252,7 +265,11 @@ export default function ProfileSetup() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col px-6 py-8 safe-top safe-bottom relative overflow-hidden md:max-w-md md:mx-auto md:w-full">
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => e.preventDefault()}
+      className="min-h-screen flex flex-col px-6 py-8 safe-top safe-bottom relative overflow-hidden md:max-w-md md:mx-auto md:w-full"
+    >
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full bg-primary/10 blur-[120px]" />
       </div>
@@ -278,13 +295,21 @@ export default function ProfileSetup() {
             {step === 0 && (
               <div>
                 <h2 className="text-2xl font-bold mb-2">Добавь фото</h2>
-                <p className="text-muted-foreground mb-6">Покажи себя — добавь хотя бы одно фото</p>
+                <p className="text-muted-foreground mb-6">Нажми на квадрат или перетащи фото сюда — добавь хотя бы одно</p>
                 <div className="grid grid-cols-3 gap-3">
                   {[0, 1, 2, 3, 4, 5].map((i) => (
                     <label
                       key={i}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (uploadingIndex === null) setDragOverIndex(i);
+                      }}
+                      onDragLeave={() => setDragOverIndex((cur) => (cur === i ? null : cur))}
+                      onDrop={(e) => handleDrop(i, e)}
                       className={`aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer border-2 border-dashed transition-colors relative ${
-                        uploadingIndex === i ? 'border-primary/50' : 'border-muted hover:border-primary/50'
+                        dragOverIndex === i
+                          ? 'border-primary bg-primary/10 scale-[1.02]'
+                          : uploadingIndex === i ? 'border-primary/50' : 'border-muted hover:border-primary/50'
                       } ${uploadingIndex !== null && uploadingIndex !== i ? 'opacity-60 pointer-events-none' : ''}`}
                     >
                       {photoSlots[i] ? (

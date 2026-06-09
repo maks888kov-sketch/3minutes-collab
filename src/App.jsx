@@ -8,6 +8,7 @@ import { AuthProvider } from '@/lib/AuthContext';
 import { hasStoredSession } from '@/lib/authRedirect';
 import SplashScreen from './components/SplashScreen';
 import AppNotifications from './components/AppNotifications';
+import CallManager from './components/CallManager';
 import AuthenticatedApp from './AuthenticatedApp';
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
         {splashDone && (
           <Router>
             <AuthenticatedApp />
+            <CallManager />
           </Router>
         )}
         <AppNotifications />

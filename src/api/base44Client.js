@@ -192,6 +192,22 @@ const functions = {
 let socket = null;
 let reconnectTimer = null;
 
+/* --- Call signaling (WebRTC) layered on the same socket --------------- */
+// The profile this client speaks for; sent to the server so it can route
+// incoming call signals (offer/answer/ICE/invite) addressed to us.
+let signalProfileId = null;
+const signalHandlers = new Set();
+
+function sendHello() {
+  if (signalProfileId && socket && socket.readyState === WebSocket.OPEN) {
+    try {
+      socket.send(JSON.stringify({ type: 'hello', profile_id: signalProfileId }));
+    } catch {
+      // socket race — will retry on next (re)connect
+    }
+  }
+}
+
 function invalidate(evt) {
   const qc = queryClientInstance;
   if (!qc || !evt) return;
@@ -221,12 +237,27 @@ function connectRealtime() {
   } catch {
     return;
   }
+  socket.onopen = () => {
+    sendHello();
+  };
   socket.onmessage = (event) => {
+    let msg;
     try {
-      invalidate(JSON.parse(event.data));
+      msg = JSON.parse(event.data);
     } catch {
-      // ignore malformed events
+      return; // ignore malformed events
     }
+    if (msg && msg.type === 'signal') {
+      signalHandlers.forEach((fn) => {
+        try {
+          fn(msg);
+        } catch {
+          // a misbehaving handler must not break delivery to others
+        }
+      });
+      return;
+    }
+    invalidate(msg);
   };
   socket.onclose = () => {
     socket = null;
@@ -277,6 +308,38 @@ export const base44 = {
   auth,
   integrations,
   functions,
+  /* ----------------------------- Call signaling ---------------------- */
+  // Tell the realtime channel which profile this client is, so the server can
+  // deliver call signals addressed to us. Safe to call repeatedly.
+  setSignalingIdentity(profileId) {
+    signalProfileId = profileId || null;
+    if (signalProfileId) {
+      connectRealtime();
+      sendHello();
+    }
+  },
+  // Send a WebRTC signal to another profile. Returns false if the socket isn't
+  // open (caller can treat that as "peer unreachable right now").
+  sendSignal({ to, matchId, signal, data }) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    try {
+      socket.send(JSON.stringify({
+        type: 'signal',
+        to_profile_id: to,
+        match_id: matchId,
+        signal,
+        data,
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  // Subscribe to inbound signals; returns an unsubscribe function.
+  onSignal(handler) {
+    signalHandlers.add(handler);
+    return () => signalHandlers.delete(handler);
+  },
   // Some backend-only flows reference asServiceRole; mirror entities so any
   // accidental client use degrades gracefully to a normal authed call.
   get asServiceRole() {

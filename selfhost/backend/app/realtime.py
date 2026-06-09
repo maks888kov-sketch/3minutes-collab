@@ -7,16 +7,27 @@ from fastapi import WebSocket
 
 from app.config import settings
 
+# Entity-change events fan out to everyone (clients just refetch).
 CHANNEL = "threemin:events"
+# WebRTC call signaling is addressed to a single recipient profile.
+SIGNAL_CHANNEL = "threemin:signal"
 
 
 class RealtimeHub:
     """Fan-out hub. Events are published to Redis so the system scales across
     multiple backend instances; each instance relays them to its local
-    WebSocket clients, which trigger React Query cache invalidation."""
+    WebSocket clients.
+
+    Two flavours of traffic share the hub:
+      * entity events   -> broadcast to every connected client (cache refetch);
+      * call signaling   -> delivered only to the recipient profile's sockets,
+        so WebRTC offer/answer/ICE never leak to unrelated users. Routing goes
+        through Redis too, so the two peers may live on different instances."""
 
     def __init__(self) -> None:
         self._clients: set[WebSocket] = set()
+        # profile_id -> set of that profile's live sockets (multi-tab safe)
+        self._by_profile: dict[str, set[WebSocket]] = {}
         self._redis: aioredis.Redis | None = None
         self._pubsub_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
@@ -36,17 +47,20 @@ class RealtimeHub:
     async def _listen(self) -> None:
         assert self._redis is not None
         pubsub = self._redis.pubsub()
-        await pubsub.subscribe(CHANNEL)
+        await pubsub.subscribe(CHANNEL, SIGNAL_CHANNEL)
         try:
             async for message in pubsub.listen():
                 if message.get("type") != "message":
                     continue
-                await self._fan_out(message["data"])
+                if message.get("channel") == SIGNAL_CHANNEL:
+                    await self._deliver_signal(message["data"])
+                else:
+                    await self._fan_out(message["data"])
         except asyncio.CancelledError:
             raise
         finally:
             with contextlib.suppress(Exception):
-                await pubsub.unsubscribe(CHANNEL)
+                await pubsub.unsubscribe(CHANNEL, SIGNAL_CHANNEL)
                 await pubsub.aclose()
 
     async def _fan_out(self, payload: str) -> None:
@@ -57,7 +71,27 @@ class RealtimeHub:
             except Exception:
                 dead.append(ws)
         for ws in dead:
-            self._clients.discard(ws)
+            await self.unregister(ws)
+
+    async def _deliver_signal(self, payload: str) -> None:
+        try:
+            event = json.loads(payload)
+        except (TypeError, ValueError):
+            return
+        target = event.get("to_profile_id")
+        if not target:
+            return
+        sockets = list(self._by_profile.get(target, ()))
+        if not sockets:
+            return
+        dead: list[WebSocket] = []
+        for ws in sockets:
+            try:
+                await ws.send_text(payload)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            await self.unregister(ws)
 
     async def register(self, ws: WebSocket) -> None:
         async with self._lock:
@@ -66,12 +100,27 @@ class RealtimeHub:
     async def unregister(self, ws: WebSocket) -> None:
         async with self._lock:
             self._clients.discard(ws)
+            empty = [pid for pid, socks in self._by_profile.items()
+                     if (socks.discard(ws) or not socks)]
+            for pid in empty:
+                self._by_profile.pop(pid, None)
+
+    async def bind_profile(self, ws: WebSocket, profile_id: str) -> None:
+        """Associate a socket with a profile so it can receive call signals."""
+        async with self._lock:
+            self._by_profile.setdefault(profile_id, set()).add(ws)
 
     async def publish(self, event: dict) -> None:
         if self._redis is None:
             return
         with contextlib.suppress(Exception):
             await self._redis.publish(CHANNEL, json.dumps(event))
+
+    async def publish_signal(self, event: dict) -> None:
+        if self._redis is None:
+            return
+        with contextlib.suppress(Exception):
+            await self._redis.publish(SIGNAL_CHANNEL, json.dumps(event))
 
 
 hub = RealtimeHub()

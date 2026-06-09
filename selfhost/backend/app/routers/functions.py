@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.email_service import send_email
 from app.errors import ApiError
+from app.ice import build_ice_servers
 from app.models import User
 from app.otp import issue_code, verify_code
 from app.security import hash_password
@@ -35,6 +36,11 @@ async def invoke_function(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    if function_name == "getIceServers":
+        # Public: returns STUN/TURN config the browser feeds to RTCPeerConnection.
+        # TURN credentials (when configured) are short-lived and minted per call.
+        return {"iceServers": build_ice_servers()}
+
     payload = await request.json()
 
     if function_name == "requestPasswordResetCode":

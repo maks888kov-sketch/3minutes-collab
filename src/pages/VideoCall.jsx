@@ -1,6 +1,6 @@
 /* b44-full-sync 2026-06-01 */
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import { useCurrentProfile } from '@/lib/useProfile';
@@ -14,14 +14,15 @@ import {
   resolveTestBotOtherProfile,
   completeTestBotVideoCall,
 } from '@/lib/testBotStore';
+import { useWebRtcCall } from '@/lib/useWebRtcCall';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   Mic, MicOff, Video, VideoOff, PhoneOff, Heart,
-  Hand, Timer, Sparkles, Loader2, X
+  Hand, Timer, Sparkles, Loader2, X, PhoneMissed
 } from 'lucide-react';
 
-// phase: lobby → connecting → active → rating → choice
+// phase: lobby → ringing → connecting → active → rating → choice / ended
 function formatCallDuration(totalSeconds) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -32,24 +33,41 @@ function formatCallDuration(totalSeconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+const ENDED_COPY = {
+  rejected: { title: 'Звонок отклонён', sub: 'Пользователь сейчас не может говорить' },
+  'no-answer': { title: 'Нет ответа', sub: 'Попробуйте позвонить чуть позже' },
+  busy: { title: 'Занято', sub: 'Пользователь уже в другом звонке' },
+  failed: { title: 'Связь прервалась', sub: 'Не удалось установить соединение' },
+  'no-camera': { title: 'Нет доступа к камере', sub: 'Разрешите камеру и микрофон в настройках браузера' },
+  'peer-left': { title: 'Звонок завершён', sub: 'Собеседник вышел из звонка' },
+  cancelled: { title: 'Звонок отменён', sub: '' },
+};
+
 export default function VideoCall() {
   const { matchId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: myProfile } = useCurrentProfile();
   const queryClient = useQueryClient();
 
-  const [phase, setPhase] = useState('lobby');
+  const isTestCall = isTestBotMatchId(matchId);
+  const role = location.state?.role === 'callee' ? 'callee' : 'caller';
+
+  const [phase, setPhase] = useState(
+    !isTestCall && role === 'callee' ? 'connecting' : 'lobby'
+  );
   const [timeLeft, setTimeLeft] = useState(INTRO_VIDEO_DURATION_SEC);
   const [elapsed, setElapsed] = useState(0);
-  const [muted, setMuted] = useState(false);
-  const [videoOff, setVideoOff] = useState(false);
+  const [testMuted, setTestMuted] = useState(false);
+  const [testVideoOff, setTestVideoOff] = useState(false);
   const [rating, setRating] = useState(null);
   const [choice, setChoice] = useState(null);
   const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
   const streamRef = useRef(null);
+  const leftRef = useRef(false);
+  const wasActiveRef = useRef(false);
   const [otherProfile, setOtherProfile] = useState(null);
-
-  const isTestCall = isTestBotMatchId(matchId);
 
   const { data: match } = useQuery({
     queryKey: ['match', matchId],
@@ -60,6 +78,11 @@ export default function VideoCall() {
     },
     enabled: !!matchId,
   });
+
+  const peerId = useMemo(() => {
+    if (!match || !myProfile) return null;
+    return match.profile_a_id === myProfile.id ? match.profile_b_id : match.profile_a_id;
+  }, [match, myProfile]);
 
   useEffect(() => {
     if (!match || !myProfile) return;
@@ -75,6 +98,40 @@ export default function VideoCall() {
 
   const isUnlimitedCall = isUnlimitedVideoCall(match);
 
+  const callerInfo = useMemo(() => ({
+    callerName: myProfile?.name || 'Звонок',
+    callerPhoto: myProfile?.photos?.[0] || '',
+    unlimited: isUnlimitedCall,
+  }), [myProfile?.name, myProfile?.photos, isUnlimitedCall]);
+
+  const call = useWebRtcCall({
+    enabled: !isTestCall && !!matchId && !!peerId && !!myProfile,
+    role,
+    matchId,
+    peerProfileId: peerId,
+    callerInfo,
+  });
+  // Destructure into stable references so effects don't re-run every render.
+  const {
+    status: callStatus,
+    endedReason,
+    muted: callMuted,
+    videoOff: callVideoOff,
+    localStream,
+    remoteStream,
+    prepareCamera,
+    start: startCall,
+    hangup: hangupCall,
+    cancel: cancelCall,
+    toggleMute: callToggleMute,
+    toggleVideo: callToggleVideo,
+  } = call;
+
+  const muted = isTestCall ? testMuted : callMuted;
+  const videoOff = isTestCall ? testVideoOff : callVideoOff;
+  const toggleMute = () => (isTestCall ? setTestMuted((m) => !m) : callToggleMute());
+  const toggleVideo = () => (isTestCall ? setTestVideoOff((v) => !v) : callToggleVideo());
+
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
@@ -85,20 +142,36 @@ export default function VideoCall() {
     }
   };
 
+  const finishUnlimitedCall = useCallback(() => {
+    if (leftRef.current) return;
+    leftRef.current = true;
+    if (isTestCall) stopCamera();
+    else hangupCall();
+    navigate(`/chat/${matchId}`);
+  }, [isTestCall, hangupCall, matchId, navigate]);
+
   const handleCancel = () => {
-    stopCamera();
+    if (leftRef.current) return;
+    leftRef.current = true;
+    if (isTestCall) stopCamera();
+    else cancelCall();
     navigate(`/chat/${matchId}`);
   };
 
   const handleStartCall = () => {
-    setElapsed(0);
-    setTimeLeft(INTRO_VIDEO_DURATION_SEC);
-    setPhase('connecting');
-    window.setTimeout(() => setPhase('active'), 1200);
+    if (isTestCall) {
+      setElapsed(0);
+      setTimeLeft(INTRO_VIDEO_DURATION_SEC);
+      setPhase('connecting');
+      window.setTimeout(() => setPhase('active'), 1200);
+    } else {
+      startCall();
+    }
   };
 
-  // Camera preview in lobby
+  // Test-bot path keeps a simple local camera preview.
   useEffect(() => {
+    if (!isTestCall) return undefined;
     let cancelled = false;
     const startCamera = async () => {
       try {
@@ -118,7 +191,61 @@ export default function VideoCall() {
       cancelled = true;
       stopCamera();
     };
-  }, []);
+  }, [isTestCall]);
+
+  // Real path: warm up the camera for the caller's lobby preview.
+  useEffect(() => {
+    if (isTestCall || role !== 'caller' || !peerId || !myProfile) return;
+    prepareCamera().catch(() => {});
+  }, [isTestCall, role, peerId, myProfile, prepareCamera]);
+
+  // Real path: the callee already accepted — connect automatically.
+  useEffect(() => {
+    if (isTestCall || role !== 'callee' || !peerId || !myProfile) return;
+    startCall();
+  }, [isTestCall, role, peerId, myProfile, startCall]);
+
+  // Real path: bind media streams to the video elements.
+  useEffect(() => {
+    if (isTestCall) return;
+    if (localVideoRef.current) localVideoRef.current.srcObject = localStream || null;
+  }, [isTestCall, localStream]);
+
+  useEffect(() => {
+    if (isTestCall) return;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream || null;
+  }, [isTestCall, remoteStream]);
+
+  // Real path: drive the page phase from the call's connection status.
+  useEffect(() => {
+    if (isTestCall) return;
+    const st = callStatus;
+    if (st === 'ringing') {
+      setPhase('ringing');
+    } else if (st === 'connecting') {
+      setPhase((p) => (p === 'rating' || p === 'choice' ? p : 'connecting'));
+    } else if (st === 'connected') {
+      setPhase((p) => (p === 'rating' || p === 'choice' ? p : 'active'));
+    } else if (st === 'ended') {
+      if (wasActiveRef.current) {
+        if (isUnlimitedCall) finishUnlimitedCall();
+        else setPhase((p) => (p === 'choice' ? p : 'rating'));
+      } else {
+        setPhase('ended');
+      }
+    }
+  }, [isTestCall, callStatus, isUnlimitedCall, finishUnlimitedCall]);
+
+  useEffect(() => {
+    if (phase === 'active') wasActiveRef.current = true;
+  }, [phase]);
+
+  // Real path: hang up the peer connection whenever we enter the rating screen
+  // (covers both the 3-min timeout and the manual "end call" button).
+  useEffect(() => {
+    if (isTestCall) return;
+    if (phase === 'rating') hangupCall();
+  }, [phase, isTestCall, hangupCall]);
 
   // Таймер первого знакомства (3 мин)
   useEffect(() => {
@@ -148,11 +275,6 @@ export default function VideoCall() {
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const progress = (INTRO_VIDEO_DURATION_SEC - timeLeft) / INTRO_VIDEO_DURATION_SEC;
-
-  const finishUnlimitedCall = () => {
-    stopCamera();
-    navigate(`/chat/${matchId}`);
-  };
 
   const handleEndCall = () => {
     if (isUnlimitedCall) {
@@ -210,16 +332,20 @@ export default function VideoCall() {
   const otherPhoto = otherProfile?.photos?.[0]
     || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=600&fit=crop';
 
+  const showRemoteVideo = !isTestCall && !!remoteStream;
+
   const reactions = [
     { key: 'bad', emoji: '😕', label: 'Не очень' },
     { key: 'ok', emoji: '🙂', label: 'Нормально' },
     { key: 'great', emoji: '😍', label: 'Отлично' },
   ];
 
+  const endedCopy = ENDED_COPY[endedReason] || ENDED_COPY.cancelled;
+
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Cancel — lobby / connecting / active */}
-      {(phase === 'lobby' || phase === 'connecting' || phase === 'active') && (
+      {/* Cancel — lobby / ringing / connecting / active */}
+      {(phase === 'lobby' || phase === 'ringing' || phase === 'connecting' || phase === 'active') && (
         <button
           type="button"
           onClick={handleCancel}
@@ -230,9 +356,17 @@ export default function VideoCall() {
         </button>
       )}
 
-      {/* Remote video bg */}
+      {/* Remote video / photo bg */}
       <div className="absolute inset-0">
-        <img src={otherPhoto} alt="" className="w-full h-full object-cover" />
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          className={`w-full h-full object-cover ${showRemoteVideo ? '' : 'hidden'}`}
+        />
+        {!showRemoteVideo && (
+          <img src={otherPhoto} alt="" className="w-full h-full object-cover" />
+        )}
         <div className="absolute inset-0 bg-black/30" />
       </div>
 
@@ -271,6 +405,30 @@ export default function VideoCall() {
         )}
       </AnimatePresence>
 
+      {/* RINGING — звоним собеседнику (real call, caller) */}
+      <AnimatePresence>
+        {phase === 'ringing' && (
+          <motion.div
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/75 backdrop-blur-xl px-8"
+          >
+            <motion.div
+              animate={{ scale: [1, 1.06, 1] }}
+              transition={{ duration: 1.4, repeat: Infinity }}
+              className="w-24 h-24 rounded-full overflow-hidden border-2 border-primary neon-glow mb-5"
+            >
+              <img src={otherPhoto} alt="" className="w-full h-full object-cover" />
+            </motion.div>
+            <h2 className="text-xl font-bold text-white mb-2">{otherProfile?.name || '...'}</h2>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Звоним...</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* CONNECTING */}
       <AnimatePresence>
         {phase === 'connecting' && (
@@ -293,6 +451,32 @@ export default function VideoCall() {
             <p className="text-xs text-muted-foreground/60 mt-2">
               {isUnlimitedCall ? 'Без ограничения по времени' : 'Видео-встреча на 3 минуты'}
             </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ENDED — звонок не состоялся (rejected / no-answer / busy / failed) */}
+      <AnimatePresence>
+        {phase === 'ended' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/85 backdrop-blur-2xl px-8"
+          >
+            <div className="w-16 h-16 rounded-full glass flex items-center justify-center mb-5">
+              <PhoneMissed className="w-7 h-7 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2 text-center">{endedCopy.title}</h2>
+            {endedCopy.sub && (
+              <p className="text-sm text-muted-foreground text-center mb-8 max-w-xs">{endedCopy.sub}</p>
+            )}
+            <Button
+              onClick={() => navigate(`/chat/${matchId}`)}
+              className="w-full max-w-xs h-12 gradient-primary rounded-2xl border-0"
+            >
+              Вернуться в чат
+            </Button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -351,7 +535,7 @@ export default function VideoCall() {
       )}
 
       {/* Local video PiP */}
-      {(phase === 'lobby' || phase === 'connecting' || phase === 'active') && (
+      {(phase === 'lobby' || phase === 'ringing' || phase === 'connecting' || phase === 'active') && (
       <div className="absolute top-24 right-4 z-20 w-28 h-40 rounded-2xl overflow-hidden border border-white/20 shadow-2xl">
         <video ref={localVideoRef} autoPlay muted playsInline className={`w-full h-full object-cover ${videoOff ? 'hidden' : ''}`} />
         {videoOff && (
@@ -489,7 +673,7 @@ export default function VideoCall() {
         <div className="relative z-10 mt-auto pb-12 safe-bottom">
           <div className="flex items-center justify-center gap-5">
             <button
-              onClick={() => setMuted(!muted)}
+              onClick={toggleMute}
               className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
                 muted ? 'bg-white/25 border border-white/30' : 'glass'
               }`}
@@ -504,7 +688,7 @@ export default function VideoCall() {
               <PhoneOff className="w-7 h-7 text-white" />
             </button>
             <button
-              onClick={() => setVideoOff(!videoOff)}
+              onClick={toggleVideo}
               className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
                 videoOff ? 'bg-white/25 border border-white/30' : 'glass'
               }`}

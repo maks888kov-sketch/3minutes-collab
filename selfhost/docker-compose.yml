@@ -93,6 +93,14 @@ services:
       SMTP_PORT: "1025"
       MAIL_FROM: no-reply@3minutes.local
       PUBLIC_FILE_BASE: /api/files
+      # --- WebRTC video calls (ICE) ---
+      # STUN works out of the box. To enable the TURN relay (needed for peers
+      # behind symmetric NAT), start the "turn" profile below and set TURN_URLS
+      # + TURN_SECRET (must equal coturn's static-auth-secret).
+      STUN_URLS: "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+      TURN_URLS: "${TURN_URLS:-}"
+      TURN_SECRET: "${TURN_SECRET:-}"
+      TURN_TTL_SECONDS: "3600"
     volumes:
       # Local file storage lives in the project at selfhost/uploads (git-ignored).
       - ./uploads:/data/uploads
@@ -115,6 +123,22 @@ services:
         condition: service_healthy
     ports:
       - "5180:80"              # open http://localhost:5180
+
+  # TURN relay for WebRTC — opt-in, production NAT traversal.
+  #   docker compose -f selfhost/docker-compose.yml --profile turn up -d
+  # Uses host networking so relay candidates advertise real, reachable ports.
+  # Set coturn's static-auth-secret (in selfhost/coturn/turnserver.conf) and the
+  # backend's TURN_SECRET to the same value, and TURN_URLS to your server, e.g.
+  #   TURN_URLS=turn:your.host:3478
+  coturn:
+    image: coturn/coturn:4.6.2
+    container_name: 3min-coturn
+    restart: unless-stopped
+    profiles: ["turn"]
+    network_mode: host
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]
 
 volumes:
   pgdata:
